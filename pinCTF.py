@@ -1,16 +1,27 @@
+#!/usr/bin/python3
+
 import os
+import sys
 import argparse
 import IPython
-
+import configparser
+import string
+from subprocess import PIPE, Popen
 
 
 def main():
     #Defaults
-    pinLocation = "/home/chris/pin/pin-3.5-97503-gac534ca30-gcc-linux"
-    libraryLocation = "/home/chris/pin/pin-3.5-97503-gac534ca30-gcc-linux/source/tools/ManualExamples/obj-ia32"
-    count = 20
-    seed = "ABCD"
-    variable_range = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    configLocation = "config.ini"
+    config = checkConfig(configLocation)
+
+    pinLocation = config.get("DEFAULTS","PinLocation")
+    libraryLocation = config.get("DEFAULTS","LibraryLocation")
+    count = config.get("DEFAULTS","Count")
+    seed = config.get("DEFAULTS","Seed")
+    variable_range = config.get("DEFAULTS","Range")
+
+    #a-Z
+#    variable_range = string.ascii_letters
 
     parser = argparse.ArgumentParser()
 
@@ -31,6 +42,9 @@ def main():
     parser.add_argument('-s','--seed',help="Initial seed for input or arg pin")
     parser.add_argument('-r','--range',help="range of characters to iterate pin over")
 
+    #Optionally we can specify a length for our seed
+    parser.add_argument('-sl','--seedLength',help="Initial seed length for input or arg pin")
+
     #Parse Arguments
     args =parser.parse_args()
 
@@ -47,6 +61,8 @@ def main():
         libraryLocation = args.pinLibraryLocation
     if args.count:
         count = int(args.count)
+    if args.seedLength:
+        seed = 'A'*int(args.seedLength)
     if args.seed:
         seed = args.seed
     if args.range:
@@ -55,7 +71,7 @@ def main():
     #Can I get a switch statement please?
     if args.argLength:
         argLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=True)
-        print("[+] Found Num {} : Count {}".format(argLengthTuple[0], argLengthTuple[1]))
+        print("[+] Found Length {} : Count {}".format(argLengthTuple[0], argLengthTuple[1]))
 
     if args.inputLength:
         inputLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=False)
@@ -69,7 +85,40 @@ def main():
         pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False)
         print("[+] Found pattern {}".format(pattern))
 
+#Checks for existence of config
+#Creates config if not found, else returns config
+def checkConfig(configPath):
+    config = None
+    if not os.path.isfile(configPath):
 
+        print("[-] No config found. Building now")
+
+        cwd = os.getcwd()
+
+        config = configparser.ConfigParser()
+        config.add_section("DEFAULTS")
+
+        #Set defaults if no config is found
+        config.set("DEFAULTS","PinLocation","")
+        if os.path.isdir("{}/pin".format(cwd)):
+            config.set("DEFAULTS","PinLocation","{}/pin".format(cwd))
+
+        config.set("DEFAULTS","LibraryLocation","")
+        if os.path.isdir("{}/obj-ia32".format(cwd)):
+            config.set("DEFAULTS","LibraryLocation","{}/obj-ia32".format(cwd))
+
+        config.set("DEFAULTS","Count","20")
+        config.set("DEFAULTS","Seed","ABCD")
+        config.set("DEFAULTS","Range","abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_-")
+
+        configFile = open(configPath,'w')
+        config.write(configFile)
+        configFile.close()
+    else:
+        config = configparser.ConfigParser()
+        config.read(configPath)
+
+    return config
 
 def readCount():
     inscountFileName = "inscount.out"
@@ -80,37 +129,46 @@ def readCount():
     return count
 
 def sendPinArgCommand(pin,library,binary,arg):
-    COMMAND = "{}/pin -t {}/inscount0.so -- {} {}".format(pin,library,binary,arg)
-    #os.popen(COMMAND)
+    #The delay given by Popen causes inconsistencies in PIN
+    #So use os.system instead
+    COMMAND = "{}/pin -t {}/inscount0.so -- {} {} > /dev/null".format(pin,library,binary,arg)
     os.system(COMMAND)
-    print(COMMAND)
+
     count = readCount()
     return count
 
 def sendPinInputCommand(pin,library,binary,input):
-    #TODO redo sending input
-    COMMAND = "{}/pin -t {}/inscount0.so -- {} <<< \'{}\'".format(pin,library,binary,input)
-    #os.popen(COMMAND)
-    os.system(COMMAND)
+    
+    #The delay given by Popen causes inconsistencies in PIN
+    #So use os.system instead
+    ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
+
+    #Send the output to /dev/null since it will pollute the screen otherwise
+    os.system("echo {} | {} > /dev/null".format(input,ARGS))
+
     count = readCount()
     return count
 
 def pinLength(pin,library,binary,length,arg=False):
     lengthDict = {}
-    for i in range(length):
+    for i in range(1,int(length+1)):
         if arg:
-            count = sendPinArgCommand(pin,library,binary,'A'*(i+1))
+            count = sendPinArgCommand(pin,library,binary,'A'*(i))
         else:
-            count = sendPinInputCommand(pin,library, binary, 'A' * (i + 1))
+            count = sendPinInputCommand(pin,library, binary, 'A' * (i))
+        sys.stdout.write("[~] Trying {}\r".format('A'*(i)))
+        sys.stdout.flush()
         lengthDict[i] = count
 
     #Get largest count value
     largestCount = 0
     largestNum = 0
+#    print("{:<4} : {:<15}".format("Num","Instr Count"))
     for num in lengthDict:
         if lengthDict[num] > largestCount:
             largestCount = lengthDict[num]
             largestNum = num
+ #       print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
 def pinIter(pin,library,binary,seed,variable_range,arg=False):
@@ -122,6 +180,10 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False):
         for item in variable_range:
             #Exchange value in seed for our range values
             #Python strings can't do it, so we use a list
+
+            sys.stdout.write("[~] Trying {}\r".format(seed))
+            sys.stdout.flush()
+
             seedList = list(seed)
             seedList[i] = item
             seed = ''.join(seedList)
@@ -134,15 +196,19 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False):
         # Get largest count value
         largestCount = 0
         largestItem = 0
-        for num in rangeDict:
-            if rangeDict[num] > largestCount:
-                largestCount = rangeDict[num]
-                largestItem= num
+  #      print("{:<4} : {:<15}".format("Num","Instr Count"))
+        #for num in rangeDict:
+        for k, v in rangeDict.items():
+            if v > largestCount:
+                largestCount = v
+                largestItem= k
+ #           print("{:<4} : {:<15}".format(k,v))
 
         #Slot the value in
         seedList = list(seed)
         seedList[i] = largestItem
         seed = ''.join(seedList)
+        print("[+] iter {} using {} for {}".format(i,largestItem,seed))
     return seed
 
 
