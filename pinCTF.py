@@ -19,6 +19,7 @@ def main():
     count = config.get("DEFAULTS","Count")
     seed = config.get("DEFAULTS","Seed")
     variable_range = config.get("DEFAULTS","Range")
+    start = 0
 
     #a-Z
 #    variable_range = string.ascii_letters
@@ -42,8 +43,9 @@ def main():
     parser.add_argument('-s','--seed',help="Initial seed for input or arg pin")
     parser.add_argument('-r','--range',help="range of characters to iterate pin over")
 
-    #Optionally we can specify a length for our seed
+    #Optionally we can specify a length for our seed, further we can choose where to start guessing
     parser.add_argument('-sl','--seedLength',help="Initial seed length for input or arg pin")
+    parser.add_argument('-st','--seedStart',help="Initial seed index for pin")
 
     #Parse Arguments
     args =parser.parse_args()
@@ -67,6 +69,8 @@ def main():
         seed = args.seed
     if args.range:
         variable_range = args.range
+    if args.seedStart:
+        start = int(args.seedStart)
 
     #Can I get a switch statement please?
     if args.argLength:
@@ -78,11 +82,11 @@ def main():
         print("[+] Found Num {} : Count {}".format(inputLengthTuple[0], inputLengthTuple[1]))
 
     if args.arg:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start)
         print("[+] Found pattern {}".format(pattern))
 
     if args.input:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start)
         print("[+] Found pattern {}".format(pattern))
 
 #Checks for existence of config
@@ -124,7 +128,12 @@ def readCount():
     inscountFileName = "inscount.out"
     inscountFile = open(inscountFileName)
     line = inscountFile.read()
-    count = int(line.split(' ')[1])
+    count = 0
+    try:
+        count = int(line.split(' ')[1])
+    except:
+        print("[-] Expected number, got {}".format(line))
+
     inscountFile.close()
     return count
 
@@ -171,45 +180,150 @@ def pinLength(pin,library,binary,length,arg=False):
         print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
-def pinIter(pin,library,binary,seed,variable_range,arg=False):
+def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0):
 
     seedLength = len(seed)
 
-    for i in range(seedLength):
+    #FavoredPaths help us reset iterations when it's not sure 
+    #whether more or fewer instructions gets the analysis closer
+    favoredPaths = set()
+    favoredPaths.add(seed)
+
+    for i in range(start,seedLength):
+
         rangeDict = {}
-        for item in variable_range:
-            #Exchange value in seed for our range values
-            #Python strings can't do it, so we use a list
 
-            sys.stdout.write("[~] Trying {}\r".format(seed))
-            sys.stdout.flush()
+        #A copy is made since we modify favoredPaths inside
+        #the loop
+        favoredPathsCopy = favoredPaths.copy()
+        pathIter = 0
+        favored = True
+        for path in favoredPathsCopy:
+            
+            #An unmodified path is needed to remove from the
+            #Favored path list
+            originalPath = path
 
-            seedList = list(seed)
-            seedList[i] = item
-            seed = ''.join(seedList)
-            if arg:
-                count = sendPinArgCommand(pin,library,binary,seed)
+            #This could be parallelized
+            #Each thread/process could use a unique directory
+            #And send input from a pool of choices given by
+            #varaible_range
+            for item in variable_range:
+                #Exchange value in seed for our range values
+                #Python strings can't do it, so we use a list
+
+                sys.stdout.write("[~] Trying {}\r".format(path))
+                sys.stdout.flush()
+
+                seedList = list(path)
+                seedList[i] = item
+                path = ''.join(seedList)
+                if arg:
+                    count = sendPinArgCommand(pin,library,binary,path)
+                else:
+                    count = sendPinInputCommand(pin,library,binary,path)
+                rangeDict[item] = count
+
+            #New line to fix carriage return
+            print()
+
+            countTuple = getItemByCount(rangeDict)
+            largestItem = countTuple[0]
+            largestCount = countTuple[1]
+           
+            #Does our largest count match other instructions?
+            minMatchCount = 3
+            uniqueCounts = list(rangeDict.values())
+            
+            uniqueUniques = set(rangeDict.values())
+            if len(uniqueUniques) == 1:
+                print("[-] Single unique instruction count")
+                print("[~] Switching to other favored paths")
+                print("Removing {}".format(originalPath))
+                favoredPaths.remove(originalPath)
+                if len(favoredPaths) > 1:
+                    print("Multiple FavoredPaths : {}".format(favoredPaths))
+                favored = False
+
+
+
+            rangeList = list(rangeDict.values())
+            average = sum(rangeList) / float(len(rangeList))
+
+            if (uniqueCounts.count(largestCount) > minMatchCount or (largestCount - average) < 4) and favored:
+                deltaTuple = getItemByDelta(rangeDict)
+                largestItem = deltaTuple[0]
+                largestCount = deltaTuple[1]
+
+            #Slot the value in
+            if favored:
+                try:
+                    seedList = list(path)
+                    seedList[i] = largestItem
+                    path = ''.join(seedList)
+                    print("[+] iter {} using {} for {}".format(i,largestItem,path))
+                except:
+                    print("[-] Unable to slot value into seed string. Likely 0 delta from other inputs")
+                    print("[~] Switching to other favored paths")
+                    print("Removing {}".format(originalPath))
+                    favoredPaths.remove(originalPaths)
+                    if len(favoredPaths) > 1:
+                        print("Multiple FavoredPaths : {}".format(favoredPaths))
+                    favored = False
+                
+
+            if favored:
+                favoredPaths.clear()
+                #Building a favored paths list for exploration
+                for x in uniqueCounts:
+                    if uniqueCounts.count(x) == 1:
+                        temp = ""
+                        for k, v in rangeDict.items():
+                            if v == x:
+                                temp = k
+
+                        seedList = list(path)
+                        seedList[i] = temp
+                        favoredSeed = ''.join(seedList)
+                        favoredPaths.add(favoredSeed)
+                if len(favoredPaths) > 1:
+                    print("Multiple FavoredPaths : {}".format(favoredPaths))
+                favoredPaths.add(path)
+                favored = True
+                break
             else:
-                count = sendPinInputCommand(pin,library,binary,seed)
-            rangeDict[item] = count
+                print("[+] Ignoring path {}".format(path))
 
-        # Get largest count value
-        largestCount = 0
-        largestItem = 0
-  #      print("{:<4} : {:<15}".format("Num","Instr Count"))
-        #for num in rangeDict:
-        for k, v in rangeDict.items():
-            if v > largestCount:
-                largestCount = v
-                largestItem= k
- #           print("{:<4} : {:<15}".format(k,v))
+    return favoredPaths.pop()
 
-        #Slot the value in
-        seedList = list(seed)
-        seedList[i] = largestItem
-        seed = ''.join(seedList)
-        print("[+] iter {} using {} for {}".format(i,largestItem,seed))
-    return seed
+def getItemByDelta(rangeDict):
+            rangeList = list(rangeDict.values())
+            print("[~] Largest instruction count found to match several others or very close")
+            print("[~] Locating largest difference from average instead")
 
+            #Get largest delta
+            largestCount = 0
+            largestItem = 0
 
+            #Get Average
+            rangeList = list(rangeDict.values())
+            average = sum(rangeList) / float(len(rangeList))
+
+            for k, v in rangeDict.items():
+ #               print("Key {} : Count {} : Delta {} vs {}".format(k,v,abs(v-average),largestCount))
+                if abs(v - average) > largestCount:
+                    largestItem = k
+                    largestCount = abs(v - average)
+            return(largestItem,largestCount)
+def getItemByCount(rangeDict):
+    # Get largest count value
+    largestCount = 0
+    largestItem = 0
+#    print("{:<4} : {:<15}".format("Num","Instr Count"))
+    for k, v in rangeDict.items():
+        if v > largestCount:
+            largestCount = v
+            largestItem= k
+#        print("{:<4} : {:<15}".format(k,v))
+    return(largestItem,largestCount)
 main()
