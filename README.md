@@ -9,7 +9,7 @@ Included in this repo is a script for pulling down Intel's PIN and instructions 
 
 ```
 #This script will pull PIN and install dependencies needed.
-./InstallPin.sh
+./installPin.sh
 ```
 
 ## Running PinCTF
@@ -86,9 +86,11 @@ Num  : Instr Count    AAAAAAAAAAAAAAAAAAA
 [+] Found Num 28 : Count 2132982
 
 ```
+Now we know we that the flag is 28 characters long and we can start looking for a flag of 28 characters.
+
 
 Once you've found a length that seems to work you can use pin to change each value testing for instruction changes
-The -sl flag can be used to determine the length, and the -r flag can be used to choose what range to iterate over
+The -sl flag can be used to determine the length of the initial seed, and the -r flag can be used to choose what range to iterate over
 ```
 ./pinCTF.py -f examples/wyvern_c85f1be480808a9da350faaa6104a19b -i -l obj-intel64/ -sl 28 -r abcdefghijklmnopqrstuvwxyz012345_-+LVMA
 [+] iter 0 using d for dAAAAAAAAAAAAAAAAAAAAAAAAAAA
