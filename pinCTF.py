@@ -151,7 +151,7 @@ def sendPinInputCommand(pin,library,binary,input):
 
 def pinLength(pin,library,binary,length,arg=False):
     lengthDict = {}
-    for i in range(1,int(length+1)):
+    for i in range(1,int(length)+1):
         if arg:
             count = sendPinArgCommand(pin,library,binary,'A'*(i))
         else:
@@ -163,12 +163,12 @@ def pinLength(pin,library,binary,length,arg=False):
     #Get largest count value
     largestCount = 0
     largestNum = 0
-#    print("{:<4} : {:<15}".format("Num","Instr Count"))
+    print("{:<4} : {:<15}".format("Num","Instr Count"))
     for num in lengthDict:
         if lengthDict[num] > largestCount:
             largestCount = lengthDict[num]
             largestNum = num
- #       print("{:<4} : {:<15}".format(num,lengthDict[num]))
+        print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
 def pinIter(pin,library,binary,seed,variable_range,arg=False):
