@@ -6,6 +6,8 @@ import argparse
 import IPython
 import configparser
 import string
+import concurrent.futures
+import shutil
 from subprocess import PIPE, Popen
 
 
@@ -20,6 +22,7 @@ def main():
     seed = config.get("DEFAULTS","Seed")
     variable_range = config.get("DEFAULTS","Range")
     start = 0
+    threading = False
 
     #a-Z
 #    variable_range = string.ascii_letters
@@ -47,6 +50,10 @@ def main():
     parser.add_argument('-sl','--seedLength',help="Initial seed length for input or arg pin")
     parser.add_argument('-st','--seedStart',help="Initial seed index for pin")
 
+    #Speed up process with threading options
+    parser.add_argument('-t','--threading',help="Enables threading",action='store_true')
+    parser.add_argument('-tc','--threadCount',help="Number of threads",default=2)
+
     #Parse Arguments
     args =parser.parse_args()
 
@@ -71,6 +78,8 @@ def main():
         variable_range = args.range
     if args.seedStart:
         start = int(args.seedStart)
+    if args.threading:
+        threading = True
 
     #Can I get a switch statement please?
     if args.argLength:
@@ -82,11 +91,11 @@ def main():
         print("[+] Found Num {} : Count {}".format(inputLengthTuple[0], inputLengthTuple[1]))
 
     if args.arg:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start,threading=threading,threadCount=int(args.threadCount))
         print("[+] Found pattern {}".format(pattern))
 
     if args.input:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start,threading=threading,threadCount=int(args.threadCount))
         print("[+] Found pattern {}".format(pattern))
 
 #Checks for existence of config
@@ -124,8 +133,8 @@ def checkConfig(configPath):
 
     return config
 
-def readCount():
-    inscountFileName = "inscount.out"
+def readCount(fileName="inscount.out"):
+    inscountFileName = fileName
     inscountFile = open(inscountFileName)
     line = inscountFile.read()
     count = 0
@@ -158,6 +167,34 @@ def sendPinInputCommand(pin,library,binary,input):
     count = readCount()
     return count
 
+def sendPinArgCommandThread(pin,library,binary,arg,ident):
+    #The delay given by Popen causes inconsistencies in PIN
+    #So use os.system instead
+
+    if not os.path.isdir("pin_{}".format(ident)):
+        os.mkdir("pin_{}".format(ident))
+    COMMAND = "cd pin_{} > /dev/null; {}/pin -t {}/inscount0.so -- {} {} > /dev/null".format(ident,pin,library,binary,arg)
+    os.system(COMMAND)
+
+    count = readCount("pin_{}/inscount.out".format(ident))
+    shutil.rmtree('pin_{}'.format(ident))
+    return count
+
+def sendPinInputCommandThread(pin,library,binary,input):
+    
+    #The delay given by Popen causes inconsistencies in PIN
+    #So use os.system instead
+    ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
+
+    #Send the output to /dev/null since it will pollute the screen otherwise
+    COMMAND = "mkdir pin_{};cd pin_{}; echo {} | {} > /dev/null".format(ident,ident,input,ARGS)
+    print(COMMAND)
+    os.system(COMMAND)
+
+    count = readCount("pin_{}".format(ident))
+    COMMAND2 = "rm -rf pin_{}".format(ident)
+    return count
+
 def pinLength(pin,library,binary,length,arg=False):
     lengthDict = {}
     for i in range(1,int(length)+1):
@@ -180,7 +217,7 @@ def pinLength(pin,library,binary,length,arg=False):
         print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
-def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0):
+def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=False,threadCount=2):
 
     seedLength = len(seed)
 
@@ -208,24 +245,42 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0):
             #Each thread/process could use a unique directory
             #And send input from a pool of choices given by
             #varaible_range
-            for item in variable_range:
-                #Exchange value in seed for our range values
-                #Python strings can't do it, so we use a list
+            if threading:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=threadCount) as executor:
+                    futureToItem = {executor.submit(runThreadedCommand,pin,library,binary,path,item,i,arg): item for item in variable_range}
+                    for future in concurrent.futures.as_completed(futureToItem):
+                        itemInstance = futureToItem[future]
+                        try:
+                            countTuple = future.result()
+                            item = countTuple[0]
+                            count = countTuple[1]
+                        except Exception as exc:
+                            print('{} had exception {}'.format(itemInstance,exc))
+                        else:
+                            #Do I need to make a lock?
+                            rangeDict[item] = count
 
-                sys.stdout.write("[~] Trying {}\r".format(path))
-                sys.stdout.flush()
+            else:
+                for item in variable_range:
 
-                seedList = list(path)
-                seedList[i] = item
-                path = ''.join(seedList)
-                if arg:
-                    count = sendPinArgCommand(pin,library,binary,path)
-                else:
-                    count = sendPinInputCommand(pin,library,binary,path)
-                rangeDict[item] = count
+                    #Exchange value in seed for our range values
+                    #Python strings can't do it, so we use a list
 
-            #New line to fix carriage return
-            print()
+                    sys.stdout.write("[~] Trying {}\r".format(path))
+                    sys.stdout.flush()
+
+                    seedList = list(path)
+                    seedList[i] = item
+                    path = ''.join(seedList)
+                    if arg:
+                        count = sendPinArgCommand(pin,library,binary,path)
+                    else:
+                        count = sendPinInputCommand(pin,library,binary,path)
+                    rangeDict[item] = count
+
+
+                #New line to fix carriage return
+                print()
 
             countTuple = getItemByCount(rangeDict)
             largestItem = countTuple[0]
@@ -326,4 +381,16 @@ def getItemByCount(rangeDict):
             largestItem= k
 #        print("{:<4} : {:<15}".format(k,v))
     return(largestItem,largestCount)
+#(runThreadedCommand,pin,library,binary,path,item,i,arg)
+def runThreadedCommand(pin,library,binary,path,item,i,arg=False):
+
+    seedList = list(path)
+    seedList[i] = item
+    path = ''.join(seedList)
+    if arg:
+        count = sendPinArgCommandThread(pin,library,binary,path,item)
+    else:
+        count = sendPinInputCommandThread(pin,library,binary,path,item)
+    return (item,count)
+
 main()

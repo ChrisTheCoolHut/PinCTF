@@ -16,9 +16,10 @@ Included in this repo is a script for pulling down Intel's PIN and instructions 
 PinCTF is implemented as a python script wrapping PIN. It will execute a pin command then read from PIN's produced *inscount.out* file
 
 ```
-[chris@Thor pinCTF]$ python pinCTF.py -h
+[chris@Thor pinCTF]$  ./pinCTF.py -h
 usage: pinCTF.py [-h] [-f FILE] [-a] [-al] [-i] [-il] [-p PINLOCATION]
                  [-l PINLIBRARYLOCATION] [-c COUNT] [-s SEED] [-r RANGE]
+                 [-sl SEEDLENGTH] [-st SEEDSTART] [-t] [-tc THREADCOUNT]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -36,6 +37,13 @@ optional arguments:
   -s SEED, --seed SEED  Initial seed for input or arg pin
   -r RANGE, --range RANGE
                         range of characters to iterate pin over
+  -sl SEEDLENGTH, --seedLength SEEDLENGTH
+                        Initial seed length for input or arg pin
+  -st SEEDSTART, --seedStart SEEDSTART
+                        Initial seed index for pin
+  -t, --threading       Enables threading
+  -tc THREADCOUNT, --threadCount THREADCOUNT
+                        Number of threads
 ```
 
 To compare instruction counts to length use the -il or -al commands
@@ -112,4 +120,43 @@ The -sl flag can be used to determine the length, and the -r flag can be used to
 [+] iter 26 using V for dr4g0n_or_p4tric1an_it5_LLVA
 [+] iter 27 using M for dr4g0n_or_p4tric1an_it5_LLVM
 [+] Found pattern dr4g0n_or_p4tric1an_it5_LLVM
+```
+
+This process is pretty slow and can be sped up with threading. The -t (--threading) flag will enable threading and -tc represents the thread count
+
+```
+time ./pinCTF.py -f /home/chris/PinCTF/examples/crypt4 -a -sl 26 --threading -tc 4
+[+] iter 0 using d for dAAAAAAAAAAAAAAAAAAAAAAAAA
+[+] iter 1 using y for dyAAAAAAAAAAAAAAAAAAAAAAAA
+[+] iter 2 using n for dynAAAAAAAAAAAAAAAAAAAAAAA
+[+] iter 3 using 4 for dyn4AAAAAAAAAAAAAAAAAAAAAA
+[+] iter 4 using m for dyn4mAAAAAAAAAAAAAAAAAAAAA
+[+] iter 5 using 1 for dyn4m1AAAAAAAAAAAAAAAAAAAA
+[+] iter 6 using c for dyn4m1cAAAAAAAAAAAAAAAAAAA
+[+] iter 7 using a for dyn4m1caAAAAAAAAAAAAAAAAAA
+[+] iter 8 using l for dyn4m1calAAAAAAAAAAAAAAAAA
+[+] iter 9 using l for dyn4m1callAAAAAAAAAAAAAAAA
+[+] iter 10 using y for dyn4m1callyAAAAAAAAAAAAAAA
+[+] iter 11 using _ for dyn4m1cally_AAAAAAAAAAAAAA
+[+] iter 12 using d for dyn4m1cally_dAAAAAAAAAAAAA
+[+] iter 13 using 3 for dyn4m1cally_d3AAAAAAAAAAAA
+[+] iter 14 using c for dyn4m1cally_d3cAAAAAAAAAAA
+[+] iter 15 using r for dyn4m1cally_d3crAAAAAAAAAA
+[+] iter 16 using y for dyn4m1cally_d3cryAAAAAAAAA
+[+] iter 17 using p for dyn4m1cally_d3crypAAAAAAAA
+[+] iter 18 using t for dyn4m1cally_d3cryptAAAAAAA
+[+] iter 19 using 3 for dyn4m1cally_d3crypt3AAAAAA
+[+] iter 20 using d for dyn4m1cally_d3crypt3dAAAAA
+[+] iter 21 using _ for dyn4m1cally_d3crypt3d_AAAA
+[+] iter 22 using c for dyn4m1cally_d3crypt3d_cAAA
+[+] iter 23 using 0 for dyn4m1cally_d3crypt3d_c0AA
+[+] iter 24 using d for dyn4m1cally_d3crypt3d_c0dA
+[~] Largest instruction count found to match several others or very close
+[~] Locating largest difference from average instead
+[+] iter 25 using 3 for dyn4m1cally_d3crypt3d_c0d3
+[+] Found pattern dyn4m1cally_d3crypt3d_c0d3
+
+real	3m26.511s
+user	10m53.012s
+sys	2m21.344s
 ```
