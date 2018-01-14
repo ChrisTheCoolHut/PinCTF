@@ -45,6 +45,7 @@ def main():
     #range to iterate over
     parser.add_argument('-s','--seed',help="Initial seed for input or arg pin")
     parser.add_argument('-r','--range',help="range of characters to iterate pin over")
+    parser.add_argument('-rev','--reversed',help="Reverse the direction of guesses",action='store_true')
 
     #Optionally we can specify a length for our seed, further we can choose where to start guessing
     parser.add_argument('-sl','--seedLength',help="Initial seed length for input or arg pin")
@@ -91,11 +92,11 @@ def main():
         print("[+] Found Num {} : Count {}".format(inputLengthTuple[0], inputLengthTuple[1]))
 
     if args.arg:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start,threading=threading,threadCount=int(args.threadCount))
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed)
         print("[+] Found pattern {}".format(pattern))
 
     if args.input:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start,threading=threading,threadCount=int(args.threadCount))
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed)
         print("[+] Found pattern {}".format(pattern))
 
 #Checks for existence of config
@@ -162,7 +163,8 @@ def sendPinInputCommand(pin,library,binary,input):
     ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
 
     #Send the output to /dev/null since it will pollute the screen otherwise
-    os.system("echo {} | {} > /dev/null".format(input,ARGS))
+    #os.system("echo {} | {} > /dev/null".format(input,ARGS))
+    os.system("printf {} | {} > /dev/null".format(input,ARGS))
 
     count = readCount()
     return count
@@ -180,19 +182,20 @@ def sendPinArgCommandThread(pin,library,binary,arg,ident):
     shutil.rmtree('pin_{}'.format(ident))
     return count
 
-def sendPinInputCommandThread(pin,library,binary,input):
+def sendPinInputCommandThread(pin,library,binary,input,ident):
     
     #The delay given by Popen causes inconsistencies in PIN
     #So use os.system instead
+    if not os.path.isdir("pin_{}".format(ident)):
+        os.mkdir("pin_{}".format(ident))
     ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
 
     #Send the output to /dev/null since it will pollute the screen otherwise
-    COMMAND = "mkdir pin_{};cd pin_{}; echo {} | {} > /dev/null".format(ident,ident,input,ARGS)
-    print(COMMAND)
+    COMMAND = "cd pin_{} > /dev/null; echo {} | {} > /dev/null".format(ident,input,ARGS)
     os.system(COMMAND)
 
-    count = readCount("pin_{}".format(ident))
-    COMMAND2 = "rm -rf pin_{}".format(ident)
+    count = readCount("pin_{}/inscount.out".format(ident))
+    shutil.rmtree('pin_{}'.format(ident))
     return count
 
 def pinLength(pin,library,binary,length,arg=False):
@@ -217,7 +220,7 @@ def pinLength(pin,library,binary,length,arg=False):
         print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
-def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=False,threadCount=2):
+def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=False,threadCount=2,reverseRange=False):
 
     seedLength = len(seed)
 
@@ -226,7 +229,12 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
     favoredPaths = set()
     favoredPaths.add(seed)
 
-    for i in range(start,seedLength):
+    iterRange = range(start,seedLength)
+    if reverseRange:
+        print("[~] Running in reverse direction")
+        iterRange = reversed(iterRange)
+
+    for i in iterRange:
 
         rangeDict = {}
 
@@ -254,6 +262,8 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
                             countTuple = future.result()
                             item = countTuple[0]
                             count = countTuple[1]
+                            if count == 0:
+                                print("[-] Count was zero for path {}".format(item))
                         except Exception as exc:
                             print('{} had exception {}'.format(itemInstance,exc))
                         else:

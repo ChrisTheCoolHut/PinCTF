@@ -124,6 +124,8 @@ The -sl flag can be used to determine the length of the initial seed, and the -r
 [+] Found pattern dr4g0n_or_p4tric1an_it5_LLVM
 ```
 
+## Script tricks for PIN
+
 This process is pretty slow and can be sped up with threading. The -t (--threading) flag will enable threading and -tc represents the thread count
 
 ```
@@ -161,4 +163,39 @@ time ./pinCTF.py -f /home/chris/PinCTF/examples/crypt4 -a -sl 26 --threading -tc
 real	3m26.511s
 user	10m53.012s
 sys	2m21.344s
+```
+
+Some ctf binaries will validate input backwards to throw off fuzzers. using the -rev flag PinCTF is able to alter the input backwards
+
+```
+./pinCTF.py -f /home/chris/PinCTF/examples/ELF-NoSoftwareBreakpoints -i -sl 25 -rev -t -tc 4
+[~] Running in reverse direction
+[+] iter 24 using S for AAAAAAAAAAAAAAAAAAAAAAAAS
+[+] iter 23 using k for AAAAAAAAAAAAAAAAAAAAAAAkS
+[+] iter 22 using c for AAAAAAAAAAAAAAAAAAAAAAckS
+[+] iter 21 using 0 for AAAAAAAAAAAAAAAAAAAAA0ckS
+[+] iter 20 using r for AAAAAAAAAAAAAAAAAAAAr0ckS
+[+] iter 19 using _ for AAAAAAAAAAAAAAAAAAA_r0ckS
+[+] iter 18 using T for AAAAAAAAAAAAAAAAAAT_r0ckS
+[+] iter 17 using N for AAAAAAAAAAAAAAAAANT_r0ckS
+[+] iter 16 using i for AAAAAAAAAAAAAAAAiNT_r0ckS
+[+] iter 15 using o for AAAAAAAAAAAAAAAoiNT_r0ckS
+[+] iter 14 using P for AAAAAAAAAAAAAAPoiNT_r0ckS
+[+] iter 13 using k for AAAAAAAAAAAAAkPoiNT_r0ckS
+[+] iter 12 using a for AAAAAAAAAAAAakPoiNT_r0ckS
+[+] iter 11 using 3 for AAAAAAAAAAA3akPoiNT_r0ckS
+[+] iter 10 using r for AAAAAAAAAAr3akPoiNT_r0ckS
+[+] iter 9 using B for AAAAAAAAABr3akPoiNT_r0ckS
+[+] iter 8 using _ for AAAAAAAA_Br3akPoiNT_r0ckS
+[+] iter 7 using e for AAAAAAAe_Br3akPoiNT_r0ckS
+[+] iter 6 using r for AAAAAAre_Br3akPoiNT_r0ckS
+[+] iter 5 using @ for AAAAA@re_Br3akPoiNT_r0ckS
+[+] iter 4 using W for AAAAW@re_Br3akPoiNT_r0ckS
+[+] iter 3 using d for AAAdW@re_Br3akPoiNT_r0ckS
+[+] iter 2 using r for AArdW@re_Br3akPoiNT_r0ckS
+[+] iter 1 using a for AardW@re_Br3akPoiNT_r0ckS
+[~] Largest instruction count found to match several others or very close
+[~] Locating largest difference from average instead
+[+] iter 0 using H for HardW@re_Br3akPoiNT_r0ckS
+[+] Found pattern HardW@re_Br3akPoiNT_r0ckS
 ```
