@@ -31,7 +31,6 @@ sudo apt install python3-pip
 pip install ipython
 
 #Setup config with defaults
-cd $WORKDIR
 printf "pin:%s
 library:%s
 count:%s

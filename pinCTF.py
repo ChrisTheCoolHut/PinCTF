@@ -55,6 +55,8 @@ def main():
     parser.add_argument('-t','--threading',help="Enables threading",action='store_true')
     parser.add_argument('-tc','--threadCount',help="Number of threads",default=2)
 
+    parser.add_argument('-sk','--skip',help="Skip extra favored paths",action='store_true')
+
     #Parse Arguments
     args =parser.parse_args()
 
@@ -62,6 +64,8 @@ def main():
     if not args.file:
         print("[-] Error missing file")
         exit(0)
+    if args.file:
+        args.file = os.path.abspath(args.file)
     if not (args.arg or args.argLength or args.input or args.inputLength): #TODO change to A xor B xor C xor D
         print("[-] Error missing pin instruction counting technique")
         exit(0)
@@ -92,11 +96,11 @@ def main():
         print("[+] Found Num {} : Count {}".format(inputLengthTuple[0], inputLengthTuple[1]))
 
     if args.arg:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=True,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed,skip=args.skip)
         print("[+] Found pattern {}".format(pattern))
 
     if args.input:
-        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed)
+        pattern = pinIter(pinLocation,libraryLocation,args.file,seed,variable_range,arg=False,start=start,threading=threading,threadCount=int(args.threadCount),reverseRange=args.reversed,skip=args.skip)
         print("[+] Found pattern {}".format(pattern))
 
 #Checks for existence of config
@@ -164,7 +168,7 @@ def sendPinInputCommand(pin,library,binary,input):
 
     #Send the output to /dev/null since it will pollute the screen otherwise
     #os.system("echo {} | {} > /dev/null".format(input,ARGS))
-    os.system("printf {} | {} > /dev/null".format(input,ARGS))
+    os.system("echo {} | {} > /dev/null".format(input,ARGS))
 
     count = readCount()
     return count
@@ -220,7 +224,7 @@ def pinLength(pin,library,binary,length,arg=False):
         print("{:<4} : {:<15}".format(num,lengthDict[num]))
     return (largestNum,largestCount)
 
-def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=False,threadCount=2,reverseRange=False):
+def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=False,threadCount=2,reverseRange=False,skip=False):
 
     seedLength = len(seed)
 
@@ -228,6 +232,8 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
     #whether more or fewer instructions gets the analysis closer
     favoredPaths = set()
     favoredPaths.add(seed)
+
+    print("[~] Status:\nthreading : {}\nreverseRange : {}\nskipFavoredPaths : {}".format(threading,reverseRange,skip))
 
     iterRange = range(start,seedLength)
     if reverseRange:
@@ -245,6 +251,7 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
         favored = True
         for path in favoredPathsCopy:
             
+            favored = True
             #An unmodified path is needed to remove from the
             #Favored path list
             originalPath = path
@@ -307,18 +314,33 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
                 print("Removing {}".format(originalPath))
                 favoredPaths.remove(originalPath)
                 if len(favoredPaths) > 1:
-                    print("Multiple FavoredPaths : {}".format(favoredPaths))
+                    print("Multiple FavoredPaths : {}".format(len(favoredPaths)))
+                    for favoredPath in favoredPaths:
+                        print(favoredPath)
                 favored = False
 
 
 
             rangeList = list(rangeDict.values())
             average = sum(rangeList) / float(len(rangeList))
-
+            extraPaths = set()
             if (uniqueCounts.count(largestCount) > minMatchCount or (largestCount - average) < 4) and favored:
                 deltaTuple = getItemByDelta(rangeDict)
                 largestItem = deltaTuple[0]
                 largestCount = deltaTuple[1]
+
+		#Check for exact matching deltas
+                deltaDict = deltaTuple[2]
+                if not skip:
+                    for k,v in deltaDict.items():
+                        if v == deltaDict[largestItem] and k is not largestItem:
+                            seedList = list(path)
+                            seedList[i] = k
+                            favoredSeed = ''.join(seedList)
+                            extraPaths.add(favoredSeed)
+                            print("[~] Adding delta favored path {}".format(favoredSeed))
+
+
 
             #Slot the value in
             if favored:
@@ -340,24 +362,28 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
             if favored:
                 favoredPaths.clear()
                 #Building a favored paths list for exploration
-                for x in uniqueCounts:
-                    if uniqueCounts.count(x) == 1:
-                        temp = ""
-                        for k, v in rangeDict.items():
-                            if v == x:
-                                temp = k
+                if not skip:
+                    for x in uniqueCounts:
+                        if uniqueCounts.count(x) == 1:
+                            temp = ""
+                            for k, v in rangeDict.items():
+                                if v == x:
+                                    temp = k
 
-                        seedList = list(path)
-                        seedList[i] = temp
-                        favoredSeed = ''.join(seedList)
-                        favoredPaths.add(favoredSeed)
+                            seedList = list(path)
+                            seedList[i] = temp
+                            favoredSeed = ''.join(seedList)
+                            favoredPaths.add(favoredSeed)
                 if len(favoredPaths) > 1:
                     print("Multiple FavoredPaths : {}".format(favoredPaths))
+                for delta in extraPaths:
+                    favoredPaths.add(delta)
+                extraPaths.clear()
                 favoredPaths.add(path)
                 favored = True
-                break
             else:
                 print("[+] Ignoring path {}".format(path))
+            favored = True
 
     return favoredPaths.pop()
 
@@ -365,6 +391,8 @@ def getItemByDelta(rangeDict):
             rangeList = list(rangeDict.values())
             print("[~] Largest instruction count found to match several others or very close")
             print("[~] Locating largest difference from average instead")
+
+            deltaDict = {}
 
             #Get largest delta
             largestCount = 0
@@ -375,21 +403,22 @@ def getItemByDelta(rangeDict):
             average = sum(rangeList) / float(len(rangeList))
 
             for k, v in rangeDict.items():
- #               print("Key {} : Count {} : Delta {} vs {}".format(k,v,abs(v-average),largestCount))
+   #             print("Key {} : Count {} : Delta {} vs {}".format(k,v,abs(v-average),largestCount))
                 if abs(v - average) > largestCount:
                     largestItem = k
                     largestCount = abs(v - average)
-            return(largestItem,largestCount)
+                deltaDict[k] = abs(v - average)
+            return(largestItem,largestCount,deltaDict)
 def getItemByCount(rangeDict):
     # Get largest count value
     largestCount = 0
     largestItem = 0
-#    print("{:<4} : {:<15}".format("Num","Instr Count"))
+ #   print("{:<4} : {:<15}".format("Num","Instr Count"))
     for k, v in rangeDict.items():
         if v > largestCount:
             largestCount = v
             largestItem= k
-#        print("{:<4} : {:<15}".format(k,v))
+  #      print("{:<4} : {:<15}".format(k,v))
     return(largestItem,largestCount)
 #(runThreadedCommand,pin,library,binary,path,item,i,arg)
 def runThreadedCommand(pin,library,binary,path,item,i,arg=False):
