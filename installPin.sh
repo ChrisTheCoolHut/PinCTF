@@ -28,7 +28,7 @@ mv obj-intel64 $WORKDIR/
 
 #IPython used for debugging scripts
 sudo apt install python3-pip
-pip install ipython
+pip3 install ipython
 
 #Setup config with defaults
 printf "pin:%s
