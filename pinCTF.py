@@ -353,7 +353,7 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
                     print("[-] Unable to slot value into seed string. Likely 0 delta from other inputs")
                     print("[~] Switching to other favored paths")
                     print("Removing {}".format(originalPath))
-                    favoredPaths.remove(originalPaths)
+                    favoredPaths.remove(originalPath)
                     if len(favoredPaths) > 1:
                         print("Multiple FavoredPaths : {}".format(favoredPaths))
                     favored = False
