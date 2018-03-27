@@ -312,7 +312,11 @@ def pinIter(pin,library,binary,seed,variable_range,arg=False,start=0,threading=F
                 print("[-] Single unique instruction count")
                 print("[~] Switching to other favored paths")
                 print("Removing {}".format(originalPath))
-                favoredPaths.remove(originalPath)
+                try:
+                    favoredPaths.remove(originalPath)
+                except:
+                    print("[-] Error path already gone")
+
                 if len(favoredPaths) > 1:
                     print("Multiple FavoredPaths : {}".format(len(favoredPaths)))
                     for favoredPath in favoredPaths:
