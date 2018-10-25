@@ -4,6 +4,8 @@ This tool is designed to use [Intel's Pin Tool](https://software.intel.com/en-us
 
 This tool is designed to use instruction counting as an avenue for [Side Channel Analysis](https://en.wikipedia.org/wiki/Side-channel_attack). By counting the number of instruction exeuted in a given reverse engineering program we can guess (Sometimes) that the more instructions that are executed per input, the closer we are to the flag.
 
+[![asciicast](https://asciinema.org/a/2bHy0y9MrGNa8Xp9MSPT17HTS.png)](https://asciinema.org/a/2bHy0y9MrGNa8Xp9MSPT17HTS)
+
 ## Install Pin
 Included in this repo is a script for pulling down Intel's PIN and instructions for building it on Ubuntu 16.04. 
 
@@ -92,7 +94,7 @@ Now we know we that the flag is 28 characters long and we can start looking for 
 Once you've found a length that seems to work you can use pin to change each value testing for instruction changes
 The -sl flag can be used to determine the length of the initial seed, and the -r flag can be used to choose what range to iterate over
 ```
-./pinCTF.py -f examples/wyvern_c85f1be480808a9da350faaa6104a19b -i -l obj-intel64/ -sl 28 -r abcdefghijklmnopqrstuvwxyz012345_-+LVMA
+./pinCTF.py -f examples/wyvern_c85f1be480808a9da350faaa6104a19b -i -l obj-intel64/ -sl 28 -r abcdefghijklmnopqrstuvwxyz012345_-+LVMA -sk
 [+] iter 0 using d for dAAAAAAAAAAAAAAAAAAAAAAAAAAA
 [+] iter 1 using r for drAAAAAAAAAAAAAAAAAAAAAAAAAA
 [+] iter 2 using 4 for dr4AAAAAAAAAAAAAAAAAAAAAAAAA
@@ -129,7 +131,7 @@ The -sl flag can be used to determine the length of the initial seed, and the -r
 This process is pretty slow and can be sped up with threading. The -t (--threading) flag will enable threading and -tc represents the thread count
 
 ```
-time ./pinCTF.py -f /home/chris/PinCTF/examples/crypt4 -a -sl 26 --threading -tc 4
+time ./pinCTF.py -f $(pwd)/examples/crypt4 -a -sl 26 --threading -tc 4
 [+] iter 0 using d for dAAAAAAAAAAAAAAAAAAAAAAAAA
 [+] iter 1 using y for dyAAAAAAAAAAAAAAAAAAAAAAAA
 [+] iter 2 using n for dynAAAAAAAAAAAAAAAAAAAAAAA
@@ -168,7 +170,7 @@ sys	2m21.344s
 Some ctf binaries will validate input backwards to throw off fuzzers. using the -rev flag PinCTF is able to alter the input backwards
 
 ```
-./pinCTF.py -f /home/chris/PinCTF/examples/ELF-NoSoftwareBreakpoints -i -sl 25 -rev -t -tc 4
+./pinCTF.py -f $(pwd)/examples/ELF-NoSoftwareBreakpoints -i -sl 25 -rev -t -tc 4 -r abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_-@
 [~] Running in reverse direction
 [+] iter 24 using S for AAAAAAAAAAAAAAAAAAAAAAAAS
 [+] iter 23 using k for AAAAAAAAAAAAAAAAAAAAAAAkS
