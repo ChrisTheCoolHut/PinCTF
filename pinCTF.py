@@ -9,6 +9,7 @@ import string
 import concurrent.futures
 import shutil
 from subprocess import PIPE, Popen
+from multiprocessing import Pool
 
 
 def main():
@@ -88,11 +89,11 @@ def main():
 
     #Can I get a switch statement please?
     if args.argLength:
-        argLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=True)
+        argLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=True, multi_core=int(args.threadCount))
         print("[+] Found Length {} : Count {}".format(argLengthTuple[0], argLengthTuple[1]))
 
     if args.inputLength:
-        inputLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=False)
+        inputLengthTuple = pinLength(pinLocation,libraryLocation,args.file,count,arg=False, multi_core=int(args.threadCount))
         print("[+] Found Num {} : Count {}".format(inputLengthTuple[0], inputLengthTuple[1]))
 
     if args.arg:
@@ -173,24 +174,27 @@ def sendPinInputCommand(pin,library,binary,input):
     count = readCount()
     return count
 
-def sendPinArgCommandThread(pin,library,binary,arg,ident):
+def sendPinArgCommandThread(pin,library,binary,arg,ident, inIMAP=False):
     #The delay given by Popen causes inconsistencies in PIN
     #So use os.system instead
 
-    if not os.path.isdir("pin_{}".format(ident)):
+    if not os.path.exists("pin_{}".format(ident)):
         os.mkdir("pin_{}".format(ident))
     COMMAND = "cd pin_{} > /dev/null; {}/pin -t {}/inscount0.so -- {} {} > /dev/null".format(ident,pin,library,binary,arg)
     os.system(COMMAND)
 
     count = readCount("pin_{}/inscount.out".format(ident))
     shutil.rmtree('pin_{}'.format(ident))
-    return count
+    if not inIMAP:
+        return count
+    else:
+        return ident,count
 
-def sendPinInputCommandThread(pin,library,binary,input,ident):
+def sendPinInputCommandThread(pin,library,binary,input,ident, inIMAP=False):
     
     #The delay given by Popen causes inconsistencies in PIN
     #So use os.system instead
-    if not os.path.isdir("pin_{}".format(ident)):
+    if not os.path.exists("pin_{}".format(ident)):
         os.mkdir("pin_{}".format(ident))
     ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
 
@@ -200,18 +204,35 @@ def sendPinInputCommandThread(pin,library,binary,input,ident):
 
     count = readCount("pin_{}/inscount.out".format(ident))
     shutil.rmtree('pin_{}'.format(ident))
-    return count
+    if not inIMAP:
+        return count
+    else:
+        return ident,count
 
-def pinLength(pin,library,binary,length,arg=False):
+def pinLength(pin,library,binary,length,arg=False, multi_core=1):
     lengthDict = {}
-    for i in range(1,int(length)+1):
-        if arg:
-            count = sendPinArgCommand(pin,library,binary,'A'*(i))
-        else:
-            count = sendPinInputCommand(pin,library, binary, 'A' * (i))
-        sys.stdout.write("[~] Trying {}\r".format('A'*(i)))
-        sys.stdout.flush()
-        lengthDict[i] = count
+    arg_list = []
+
+    if multi_core > 1:
+        m_pool = Pool(multi_core)
+        for i in range(1,int(length)+1):
+            parallel_arg = (pin, library, binary, 'A'*i,'A'*i,i-1, arg)
+            arg_list.append(parallel_arg)
+#(runThreadedCommand,pin,library,binary,path,item,i,arg)
+        for i in m_pool.imap_unordered(runThreadedCommandWrapper, arg_list):
+            sys.stdout.write("[~] Trying {}\r".format('A'*len(i[0])))
+            sys.stdout.flush()
+            lengthDict[len(i[0])] = i[1]
+    
+    else:
+        for i in range(1,int(length)+1):
+            if arg:
+                count = sendPinArgCommand(pin,library,binary,'A'*(i))
+            else:
+                count = sendPinInputCommand(pin,library, binary, 'A' * (i))
+            sys.stdout.write("[~] Trying {}\r".format('A'*(i)))
+            sys.stdout.flush()
+            lengthDict[i] = count
 
     #Get largest count value
     largestCount = 0
@@ -413,19 +434,29 @@ def getItemByCount(rangeDict):
     # Get largest count value
     largestCount = 0
     largestItem = 0
- #   print("{:<4} : {:<15}".format("Num","Instr Count"))
-    for k, v in rangeDict.items():
-        if v > largestCount:
-            largestCount = v
-            largestItem= k
-  #      print("{:<4} : {:<15}".format(k,v))
+#    print("{:<4} : {:<15}".format("Num","Instr Count"))
+    #for k, v in rangeDict.items():
+    for key in sorted(rangeDict.keys()):
+        if rangeDict[key] > largestCount:
+            largestCount = rangeDict[key]
+            largestItem= key
+#        print("{:<4} : {:<15}".format(key,rangeDict[key]))
     return(largestItem,largestCount)
+
+def runThreadedCommandWrapper(mapped_data):
+    return runThreadedCommand(mapped_data[0], mapped_data[1], mapped_data[2], mapped_data[3], mapped_data[4], mapped_data[5], mapped_data[6])
 #(runThreadedCommand,pin,library,binary,path,item,i,arg)
 def runThreadedCommand(pin,library,binary,path,item,i,arg=False):
 
-    seedList = list(path)
-    seedList[i] = item
-    path = ''.join(seedList)
+    if len(item) == 1:
+        seedList = list(path)
+        seedList[i] = item
+        path = ''.join(seedList)
+    else:
+        seedList = list(path)
+        seedList[i] = item[0]
+        path = ''.join(seedList)
+
     if arg:
         count = sendPinArgCommandThread(pin,library,binary,path,item)
     else:
