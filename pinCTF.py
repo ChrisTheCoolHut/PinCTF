@@ -168,7 +168,6 @@ def sendPinInputCommand(pin,library,binary,input):
     ARGS = "{}/pin -t {}/inscount0.so -- {} ".format(pin,library,binary)
 
     #Send the output to /dev/null since it will pollute the screen otherwise
-    #os.system("echo {} | {} > /dev/null".format(input,ARGS))
     os.system("echo {} | {} > /dev/null".format(input,ARGS))
 
     count = readCount()
