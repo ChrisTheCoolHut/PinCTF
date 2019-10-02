@@ -4,7 +4,7 @@ WORKDIR=$(pwd)
 
 #Pull latest from https://software.intel.com/en-us/articles/pin-a-binary-instrumentation-tool-downloads
 
-URL=https://software.intel.com/sites/landingpage/pintool/downloads/pin-3.7-97619-g0d0c92f4f-gcc-linux.tar.gz
+URL=https://software.intel.com/sites/landingpage/pintool/downloads/pin-3.11-97998-g7ecce2dac-gcc-linux.tar.gz
 
 wget $URL -O pin.tar.gz 
 
